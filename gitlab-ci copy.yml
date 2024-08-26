@@ -1,0 +1,510 @@
+variables:
+  # The domain used for the live deploy_prodment 
+  KUBE_NAMESPACE_dev: dev
+  KUBE_NAMESPACE_prod: prod
+  IP_DEV: 3.253.155.214 #Remplacer par votre IP de la VM
+  IP_PROD: 3.253.155.214 #Remplacer par votre IP de la VM
+  NODEPORT_DEV: 30001
+  NODEPORT_PROD: 30002
+  ###
+  KUBE_CONTEXT: "your-kubernetes-context"
+  KUBE_NAMESPACE: "sockshop"
+  DOCKER_IMAGE: "registry.gitlab.com/your-project/sockshop"
+  DOCKER_TAG: "$CI_COMMIT_REF_SLUG"
+  HELM_CHART_PATH: "./helm-charts-app"
+
+image:
+  name: "ubuntu:20.04"
+  entrypoint: ["/bin/bash", "-c"]
+
+stages:
+  # - build 
+  - test
+  - run
+  - rollback
+  - deploy_dev
+  - deploy_prod
+
+#Create a anchor for the deploy job 
+.default_script_deploy: &default_script_deploy
+  - rm -Rf ~/.kube | mkdir ~/.kube/
+  - ls
+  - echo "$KUBE_CONFIG" > ~/.kube/config
+  # - kubectl config view --raw >~/.kube/config
+  - sudo chmod 600 ~/.kube/config
+  - cd $HELM_CHART_PATH
+
+#Create a anchor for the deploy job
+.default_deploy_config_dev: &default_deploy_config_dev
+  # Use the official docker image.
+  image: docker:latest
+  stage: deploy_dev
+  variables:
+    NAMESPACE: dev
+  services:
+    - docker:dind
+
+#Create a anchor for the deploy job
+.default_deploy_config_prod: &default_deploy_config_prod
+  # Use the official docker image.
+  image: docker:latest
+  when: manual
+  stage: deploy_prod
+  variables:
+    NAMESPACE: prod
+  services:
+    - docker:dind
+
+test:
+  stage: test
+  script:
+    - uname -a
+    - *default_script_deploy
+    - ./test-chart-helm.sh
+
+test_frontend:
+  stage: test
+  script:
+    - cd $HELM_CHART_PATH
+    - sudo helm lint frontend
+    - sudo helm template frontend | sudo kubectl apply --dry-run=client -f -
+
+test_cart:
+  stage: test
+  script:
+    - cd $HELM_CHART_PATH
+    - sudo helm lint cart
+    - sudo helm template cart | sudo kubectl apply --dry-run=client -f -
+
+test_catalogue:
+  stage: test
+  script:
+    - cd $HELM_CHART_PATH
+    - sudo helm lint catalogue
+    - sudo helm template catalogue | sudo kubectl apply --dry-run=client -f -
+
+test_orders:
+  stage: test
+  script:
+    - cd $HELM_CHART_PATH
+    - sudo helm lint orders
+    - sudo helm template orders | sudo kubectl apply --dry-run=client -f -
+
+test_payment:
+  stage: test
+  script:
+    - cd $HELM_CHART_PATH
+    - sudo helm lint payment
+    - sudo helm template payment | sudo kubectl apply --dry-run=client -f -
+
+test_queueing:
+  stage: test
+  script:
+    - cd $HELM_CHART_PATH
+    - sudo helm lint queueing
+    - sudo helm template queueing | sudo kubectl apply --dry-run=client -f -
+
+test_shipping:
+  stage: test
+  script:
+    - cd cd $HELM_CHART_PATH
+    - sudo helm lint shipping
+    - sudo helm template shipping | sudo kubectl apply --dry-run=client -f -
+
+test_users:
+  stage: test
+  script:
+    - cd cd $HELM_CHART_PATH
+    - sudo helm lint users
+    - sudo helm template users | sudo kubectl apply --dry-run=client -f -
+
+# Run stage for frontend
+run_frontend:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/front-end:0.3.12
+  script:
+    # Build the container image
+    - sudo docker run -d -p 8079:80 --name front-end weaveworksdemos/front-end:0.3.12
+    - sleep 10
+    - sudo docker logs front-end
+    # - curl http://localhost:8079
+    - sudo docker stop front-end
+    - sudo docker rm front-end
+
+# Run stage for cart
+run_cart:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/carts:0.4.8
+    - sudo docker pull mongo:4.4.0  # A commenter après inclusion dans Terraform
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name carts weaveworksdemos/carts:0.4.8
+    - sudo docker run -d -p 27017:27017 --name carts-db mongo:4.4.0
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop carts
+    - sudo docker rm carts
+    - sudo docker stop carts-db
+    - sudo docker rm carts-db
+
+# Run stage for catalogue
+run_catalogue:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/catalogue:0.3.5
+    - sudo docker pull weaveworksdemos/catalogue-db:0.3.0 # A commenter après inclusion dans Terraform
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name catalogue weaveworksdemos/catalogue:0.3.5
+    - sudo docker run -d -p 3306:3306 --name catalogue-db weaveworksdemos/catalogue-db:0.3.0
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop catalogue
+    - sudo docker rm catalogue
+    - sudo docker stop catalogue-db
+    - sudo docker rm catalogue-db
+
+# Run stage for user
+run_user:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/user:0.4.7
+    - sudo docker pull weaveworksdemos/user-db:0.3.0 # A commenter après inclusion dans Terraform
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name user weaveworksdemos/user:0.4.7
+    - sudo docker run -d -p 27017:27017 --name user-db weaveworksdemos/user-db:0.3.0
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop user
+    - sudo docker rm user
+    - sudo docker stop user-db
+    - sudo docker rm user-db
+
+# Run stage for orders
+run_orders:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/orders:0.4.7
+    - sudo docker pull mongo:4.4.0 # A commenter après inclusion dans Terraform
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name orders weaveworksdemos/orders:0.4.7
+    - sudo docker run -d -p 27017:27017 --name orders-db mongo:4.4.0
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop orders
+    - sudo docker rm orders
+    - sudo docker stop orders-db
+    - sudo docker rm orders-db
+
+# Run stage for payment
+run_payment:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/payment:0.4.3
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name payment weaveworksdemos/payment:0.4.3
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop payment
+    - sudo docker rm payment
+
+# Run stage for shipping
+run_shipping:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/shipping:0.4.8
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name shipping weaveworksdemos/shipping:0.4.8
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop shipping
+    - sudo docker rm shipping
+
+# Run stage for queueing
+run_queueing:
+  stage: run
+  before_script:
+    - sudo docker pull weaveworksdemos/queue-master:0.3.1
+    - sudo docker pull rabbitmq:3.6.8
+    - sudo docker pull redis:alpine
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name queue-master weaveworksdemos/queue-master:0.3.1
+    - sudo docker run -d -p 5672:5672 --name rabbitmq rabbitmq:3.6.8
+    - sudo docker run -d -p 6379:6379 --name session-db redis:alpine
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop queue-master
+    - sudo docker rm queue-master
+    - sudo docker stop rabbitmq
+    - sudo docker rm rabbitmq
+    - sudo docker stop session-db
+    - sudo docker rm session-db
+
+# Run stage for zipkin
+run_zipkin:
+  stage: run
+  before_script:
+    - sudo docker pull openzipkin/zipkin-dependencies:1.4.0
+    - sudo docker pull openzipkin/zipkin:2.21
+    - sudo docker pull openzipkin/zipkin-mysql:1.20.0
+  script:
+    # Build the container image
+    - sudo docker run -d -p 80:80 --name zipkin-cron openzipkin/zipkin-dependencies:1.4.0
+    - sudo docker run -d -p 5672:5672 --name zipkin openzipkin/zipkin:2.21
+    - sudo docker run -d -p 6379:6379 --name zipkin-db openzipkin/zipkin-mysql:1.20.0
+    - sleep 10
+    # - curl http://localhost:80
+    - sudo docker stop zipkin-cron
+    - sudo docker rm zipkin-cron
+    - sudo docker stop zipkin
+    - sudo docker rm zipkin
+    - sudo docker stop zipkin-db
+    - sudo docker rm zipkin-db
+
+
+stop_deploy_frontend_dev:
+  stage: deploy_dev
+  variables:
+    NAMESPACE: dev
+  when: manual
+  # Don't stop the "review" for master branch or tags,
+  # it is only for branches (so PRs (most of the time))
+  environment:
+    name: dev-frontend-$CI_BUILD_REF_NAME
+    action: stop
+  script:
+    - sudo helm uninstall frontend -n $NAMESPACE
+
+deploy_frontend:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-frontend-$CI_BUILD_REF_NAME 
+    url: http://$IP_DEV:$NODEPORT_DEV
+    on_stop: stop_deploy_frontend_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install frontend ./frontend/ --values=./frontend/values.yaml --namespace $NAMESPACE --set frontend.nodePort="$NODEPORT_DEV"
+    - sleep 30
+  timeout: 5m
+
+deploy_cart:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-cart-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install cart ./cart/ --values=./cart/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_catalogue:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-catalogue-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install catalogue ./catalogue/ --values=./catalogue/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_orders:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-orders-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install orders ./orders/ --values=./orders/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_users:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-users-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install users ./users/ --values=./users/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_payment:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-payment-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install payment ./payment/ --values=./payment/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_shipping:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-shipping-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install shipping ./shipping/ --values=./shipping/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_queueing:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-queueing-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install queueing ./queueing/ --values=./queueing/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_zipkin:
+  <<: *default_deploy_config_dev
+  environment:
+    name: dev-zipkin-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV 
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install zipkin ./zipkin/ --values=./zipkin/values.yaml --namespace $NAMESPACE
+
+
+stop_deploy_frontend_prod:
+  stage: deploy_prod
+  variables:
+    NAMESPACE: prod
+  when: manual
+  # Don't stop the "review" for master branch or tags,
+  # it is only for branches (so PRs (most of the time))
+  environment:
+    name: prod-frontend-$CI_BUILD_REF_NAME
+    action: stop
+  script:
+    - sudo helm uninstall frontend -n $NAMESPACE
+
+deploy_frontend_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-frontend-$CI_BUILD_REF_NAME 
+    url: http://$IP_PROD:$NODEPORT_PROD
+    on_stop: stop_deploy_frontend_prod
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install frontend ./frontend/ --values=./frontend/values.yaml --namespace $NAMESPACE --set frontend.nodePort="$NODEPORT_PROD"
+    - sleep 30
+  timeout: 5m
+
+deploy_cart_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-cart-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install cart ./cart/ --values=./cart/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_catalogue_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-catalogue-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install catalogue ./catalogue/ --values=./catalogue/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_orders_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-orders-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install orders ./orders/ --values=./orders/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_users_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-users-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install users ./users/ --values=./users/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_payment_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-payment-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install payment ./payment/ --values=./payment/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_shipping_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-shipping-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install shipping ./shipping/ --values=./shipping/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_queueing_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-queueing-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install queueing ./queueing/ --values=./queueing/values.yaml --namespace $NAMESPACE
+    - sleep 30
+  timeout: 5m
+
+deploy_zipkin_prod:
+  <<: *default_deploy_config_prod
+  environment:
+    name: prod-zipkin-$CI_BUILD_REF_NAME
+    # url: http://$IP_DEV:$NODEPORT_DEV 
+    # on_stop: stop_dev
+  script:
+    - *default_script_deploy
+    - sudo helm upgrade --install zipkin ./zipkin/ --values=./zipkin/values.yaml --namespace $NAMESPACE
+

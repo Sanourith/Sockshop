@@ -1,0 +1,62 @@
+# Default values for sock-shop.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+global:
+  registry: ''
+
+java:
+  options: -Xms64m -Xmx128m -XX:PermSize=32m -XX:MaxPermSize=64m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom
+
+istio:
+  enabled: false
+
+ingress:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  labels: {}
+  host: ''
+  tlsSecretName: ''
+
+carts:
+  containerPort: 80
+
+cataloguedb:
+  image:
+    repo: shopshosty/catalogue-db
+    tag: 0.3.0
+  resources:
+    limits:
+      cpu: 300m
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 300Mi
+
+catalogue:
+  image:
+    repo: shopshosty/catalogue
+    tag: 0.3.5
+  containerPort: 80
+  resources:
+    limits:
+      cpu: 100m
+      memory: 100Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+  service:
+    type: ClusterIP
+
+zipkin:
+  image:
+    repo: openzipkin/zipkin
+    tag: 2.21
+  resources:
+    limits:
+      cpu: 300m
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 300Mi
+  enabled: false
+  url: zipkin.zipkin.svc.cluster.local

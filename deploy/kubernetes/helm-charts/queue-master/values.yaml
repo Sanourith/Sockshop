@@ -1,0 +1,37 @@
+# Default values for sock-shop.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+global:
+  registry: ''
+
+java:
+  options: -Xms64m -Xmx128m -XX:PermSize=32m -XX:MaxPermSize=64m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom
+
+istio:
+  enabled: false
+
+queuemaster:
+  image:
+    repo: shopshosty/queue-master
+    tag: 0.3.1
+  resources:
+    limits:
+      cpu: 300m
+      memory: 1000Mi
+    requests:
+      cpu: 300m
+      memory: 1000Mi
+
+zipkin:
+  image:
+    repo: openzipkin/zipkin
+    tag: 2.21
+  resources:
+    limits:
+      cpu: 300m
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 300Mi
+  enabled: false
+  url: zipkin.zipkin.svc.cluster.local

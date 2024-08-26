@@ -1,0 +1,9 @@
+regions:
+- eu-west-3
+
+account-blocklist:
+- "999999999999" # production
+
+accounts:
+  "501984417376": {} # aws-nuke-example
+  # "700778905650": {} # aws-nuke-example

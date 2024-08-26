@@ -1,0 +1,37 @@
+# Default values for sock-shop.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+global:
+  registry: ''
+
+java:
+  options: -Xms64m -Xmx128m -XX:PermSize=32m -XX:MaxPermSize=64m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom
+
+istio:
+  enabled: false
+
+baseDomain: maikimike.me
+ssl:
+  enabled: false
+
+ingress:
+  annotations:
+  labels: {}
+  host: ''
+  tlsSecretName: ''
+
+frontend:
+  replicas: 1
+  image:
+    repo: shopshosty/frontend
+    tag: latest
+  resources:
+    limits:
+      cpu: 300m
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 300Mi
+  service:
+    type: NodePort
+
